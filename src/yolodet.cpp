@@ -9,6 +9,18 @@ typedef struct {
     ncnn::Net dnet;
 } YOLODET;
 
+static const char* STR_CATEGORY_NAMES[] = {
+    "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light",
+    "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow",
+    "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee",
+    "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard",
+    "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple",
+    "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "couch",
+    "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "cell phone",
+    "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear",
+    "hair drier", "toothbrush"
+};
+
 void* yolodet_init(char *paramfile, char *binfile)
 {
     YOLODET *yolodet = new YOLODET();
@@ -53,6 +65,11 @@ int yolodet_detect(void *ctxt, TARGETBOX *tboxlist, int listsize, uint8_t *bitma
         tboxlist[i].y2 = values[5] * h;
     }
     return i;
+}
+
+const char* yolodet_category2str(int c)
+{
+    return (c >= 1 && c <= (int)(sizeof(STR_CATEGORY_NAMES) / sizeof(STR_CATEGORY_NAMES[0]))) ? STR_CATEGORY_NAMES[c - 1] : "unknown";
 }
 
 #ifdef _TEST_
@@ -103,7 +120,7 @@ int main(int argc, char *argv[])
 
     printf("target rect list:\n");
     for (i = 0; i < n; i++) {
-        printf("score: %.2f, category: %d, rect: (%3d %3d %3d %3d)\n", tboxes[i].score, tboxes[i].category, tboxes[i].x1, tboxes[i].y1, tboxes[i].x2, tboxes[i].y2);
+        printf("score: %.2f, category: %12s, rect: (%3d %3d %3d %3d)\n", tboxes[i].score, yolodet_category2str(tboxes[i].category), tboxes[i].x1, tboxes[i].y1, tboxes[i].x2, tboxes[i].y2);
         bmp_rectangle(&mybmp, tboxes[i].x1, tboxes[i].y1, tboxes[i].x2, tboxes[i].y2, 0, 255, 0);
     }
     printf("\n");
