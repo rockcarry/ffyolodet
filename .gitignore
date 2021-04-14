@@ -1,0 +1,11 @@
+!.gitignore
+*.dll
+*.lib
+*.exe
+*.o
+*.so
+out.bmp
+/ncnn/
+/libncnn/
+/src/test
+
