@@ -64,6 +64,7 @@ int yolodet_detect(void *ctxt, TARGETBOX *tboxlist, int listsize, uint8_t *bitma
         tboxlist[i].x2 = values[4] * w;
         tboxlist[i].y2 = values[5] * h;
     }
+    in.release();
     return i;
 }
 
