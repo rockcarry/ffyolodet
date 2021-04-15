@@ -34,7 +34,10 @@ void* yolodet_init(char *paramfile, char *binfile)
 void yolodet_free(void *ctxt)
 {
     YOLODET *yolodet = (YOLODET*)ctxt;
-    if (yolodet) yolodet->dnet.clear();
+    if (yolodet) {
+        yolodet->dnet.clear();
+        delete yolodet;
+    }
 }
 
 int yolodet_detect(void *ctxt, TARGETBOX *tboxlist, int listsize, uint8_t *bitmap, int w, int h)
