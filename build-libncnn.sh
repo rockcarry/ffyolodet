@@ -12,7 +12,7 @@ fi
 cd $TOPDIR/ncnn
 git checkout 20210322
 git checkout .
-echo "target_compile_options(ncnn PUBLIC -ffunction-sections -Os)" >> $TOPDIR/ncnn/src/CMakeLists.txt
+echo "target_compile_options(ncnn PUBLIC -ffunction-sections -fdata-sections)" >> $TOPDIR/ncnn/src/CMakeLists.txt
 cd -
 
 rm -rf $TOPDIR/build-ncnn
@@ -34,7 +34,7 @@ cmake $TOPDIR/ncnn \
 -DNCNN_BUILD_TOOLS=OFF \
 -DNCNN_BUILD_TESTS=OFF \
 -DCMAKE_TOOLCHAIN_FILE=$CMAKE_TOOLCHAIN_FILE
-make -j8 &&  make install
+make -j8 && make install
 
 rm -rf $TOPDIR/libncnn
 mv $TOPDIR/build-ncnn/install/ $TOPDIR/libncnn
