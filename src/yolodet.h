@@ -11,7 +11,7 @@ typedef struct {
     float score;
 } TARGETBOX;
 
-void* yolodet_init  (char *path);
+void* yolodet_init  (char *paramfile, char *binfile);
 void  yolodet_free  (void *ctxt);
 int   yolodet_detect(void *ctxt, TARGETBOX *bboxlist, int n, uint8_t *bitmap, int w, int h);
 const char* yolodet_category2str(int category);
