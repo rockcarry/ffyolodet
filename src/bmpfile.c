@@ -41,12 +41,13 @@ int bmp_load(BMP *pb, char *file)
     BMPFILEHEADER header = {0};
     FILE         *fp     = NULL;
     uint8_t      *pdata  = NULL;
-    int           i;
+    int           ret, i;
 
     fp = fopen(file, "rb");
     if (!fp) return -1;
 
-    fread(&header, sizeof(header), 1, fp);
+    (void)ret;
+    ret = fread(&header, sizeof(header), 1, fp);
     pb->width  = header.biWidth;
     pb->height = header.biHeight;
     pb->stride = ALIGN(header.biWidth * 3, 4);
@@ -56,7 +57,7 @@ int bmp_load(BMP *pb, char *file)
         pdata  = (uint8_t*)pb->pdata + pb->stride * pb->height;
         for (i=0; i<pb->height; i++) {
             pdata -= pb->stride;
-            fread(pdata, pb->stride, 1, fp);
+            ret = fread(pdata, pb->stride, 1, fp);
         }
     }
 
