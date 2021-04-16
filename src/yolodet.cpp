@@ -42,12 +42,17 @@ void yolodet_free(void *ctxt)
 
 int yolodet_detect(void *ctxt, TARGETBOX *tboxlist, int listsize, uint8_t *bitmap, int w, int h)
 {
+    int i;
     if (!ctxt || !bitmap) return 0;
     YOLODET *yolodet = (YOLODET*)ctxt;
 
-    const float MEAN_VALS[3] = { 0.f, 0.f, 0.f };
-    const float NORM_VALS[3] = { 1/255.f, 1/255.f, 1/255.f };
-    ncnn::Mat in = ncnn::Mat::from_pixels(bitmap, ncnn::Mat::PIXEL_BGR2RGB, w, h); // ncnn::Mat::PIXEL_RGB ?
+    static const float MEAN_VALS[3] = { 0.f, 0.f, 0.f };
+    static const float NORM_VALS[3] = { 1/255.f, 1/255.f, 1/255.f };
+#ifdef YOLO_FACE_500K
+    ncnn::Mat in = ncnn::Mat::from_pixels_resize(bitmap, ncnn::Mat::PIXEL_BGR2RGB, w, h, 320, 256);
+#else
+    ncnn::Mat in = ncnn::Mat::from_pixels(bitmap, ncnn::Mat::PIXEL_BGR2RGB, w, h);
+#endif
     in.substract_mean_normalize(MEAN_VALS, NORM_VALS);
 
     ncnn::Mat out;
@@ -56,8 +61,45 @@ int yolodet_detect(void *ctxt, TARGETBOX *tboxlist, int listsize, uint8_t *bitma
     ex.set_light_mode(true);
     ex.input  ("data"  , in );
     ex.extract("output", out);
-    
-    int i;
+
+#ifdef YOLO_FACE_500K
+    for (i = 0; i < out.h && i < listsize; i++) {
+        float x1, y1, x2, y2;
+        float pw, ph, cx, cy;
+        const float* values = out.row(i);
+
+        x1 = values[2] * w;
+        y1 = values[3] * h;
+        x2 = values[4] * w;
+        y2 = values[5] * h;
+
+        pw = x2 - x1;
+        ph = y2 - y1;
+        cx = x1 + 0.5 * pw;
+        cy = y1 + 0.5 * ph;
+
+        x1 = cx - 0.55 * pw;
+        y1 = cy - 0.35 * ph;
+        x2 = cx + 0.55 * pw;
+        y2 = cy + 0.55 * ph;
+
+        x1 = x1 < w - 1 ? x1 : w - 1;
+        x2 = x2 < w - 1 ? x2 : w - 1;
+        y1 = y1 < h - 1 ? y1 : h - 1;
+        y2 = y2 < h - 1 ? y2 : h - 1;
+        x1 = x1 > 0 ? x1 : 0;
+        x2 = x2 > 0 ? x2 : 0;
+        y1 = y1 > 0 ? y1 : 0;
+        y2 = y2 > 0 ? y2 : 0;
+
+        tboxlist[i].category= values[0];
+        tboxlist[i].score   = values[1];
+        tboxlist[i].x1      = x1;
+        tboxlist[i].y1      = y1;
+        tboxlist[i].x2      = x2;
+        tboxlist[i].y2      = y2;
+    }
+#else
     for (i = 0; i < out.h && i < listsize; i++) {
         const float* values = out.row(i);
         tboxlist[i].category= values[0];
@@ -67,6 +109,8 @@ int yolodet_detect(void *ctxt, TARGETBOX *tboxlist, int listsize, uint8_t *bitma
         tboxlist[i].x2 = values[4] * w;
         tboxlist[i].y2 = values[5] * h;
     }
+#endif
+
     in.release();
     return i;
 }

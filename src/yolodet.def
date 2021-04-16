@@ -1,0 +1,7 @@
+LIBRARY yolodet
+
+EXPORTS
+    yolodet_init
+    yolodet_free
+    yolodet_detect
+    yolodet_category2str

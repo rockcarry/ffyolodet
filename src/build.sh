@@ -15,11 +15,11 @@ case "$1" in
         $STRIP *.exe *.dll
         ;;
     ubuntu)
-        $CXX --shared yolodet.cpp $CXX_FLAGS $LD_FLAGS -o yolodet.so
+        $CXX --shared yolodet.cpp $CXX_FLAGS $LD_FLAGS -o libyolodet.so
         $STRIP test *.so
         ;;
     msc33x)
-        $CXX --shared yolodet.cpp $CXX_FLAGS $LD_FLAGS -o yolodet.so
+        $CXX --shared yolodet.cpp $CXX_FLAGS $LD_FLAGS -o libyolodet.so
         $STRIP test *.so
         ;;
     esac
