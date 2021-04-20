@@ -40,7 +40,7 @@ void yolodet_free(void *ctxt)
     }
 }
 
-int yolodet_detect(void *ctxt, TARGETBOX *tboxlist, int listsize, uint8_t *bitmap, int w, int h)
+int yolodet_detect(void *ctxt, BBOX *tboxlist, int listsize, uint8_t *bitmap, int w, int h)
 {
     int i;
     if (!ctxt || !bitmap) return 0;
@@ -96,7 +96,7 @@ int main(int argc, char *argv[])
     char *binfile  = (char*)"yolo-fastest-1.1-xl.bin";
     void *yolodet  = NULL;
     BMP   mybmp    = {0};
-    TARGETBOX tboxes[100];
+    BBOX  tboxes[100];
     uint32_t tick;
     int      n, i;
 
