@@ -5,6 +5,9 @@
 #include "bmpfile.h"
 #include "yolodet.h"
 
+#define SCORE_THRESHOLD 0.5
+#define IOU_THRESHOLD   0.5
+
 typedef struct {
     ncnn::Net dnet;
 } YOLODET;
@@ -20,6 +23,44 @@ static const char* STR_CATEGORY_NAMES[] = {
     "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear",
     "hair drier", "toothbrush"
 };
+
+
+static bool cmp_score(BBOX a, BBOX b) { return a.score > b.score; }
+
+static void nms(std::vector<BBOX> &dstlist, std::vector<BBOX> &srclist, const float threshold, int min)
+{
+    if (srclist.empty()) return;
+    sort(srclist.begin(), srclist.end(), cmp_score);
+    int head, i;
+    for (head = 0; head < (int)srclist.size(); ) {
+        int x11 = srclist[head].x1;
+        int y11 = srclist[head].y1;
+        int x12 = srclist[head].x2;
+        int y12 = srclist[head].y2;
+        dstlist.push_back(srclist[head]);
+        for (i = head + 1, head = -1; i < (int)srclist.size(); i++) {
+            if (srclist[i].score == 0) continue;
+            int x21 = srclist[i].x1;
+            int y21 = srclist[i].y1;
+            int x22 = srclist[i].x2;
+            int y22 = srclist[i].y2;
+            int xc1 = x11 > x21 ? x11 : x21;
+            int yc1 = y11 > y21 ? y11 : y21;
+            int xc2 = x12 < x22 ? x12 : x22;
+            int yc2 = y12 < y22 ? y12 : y22;
+            int sc  = (xc1 < xc2 && yc1 < yc2) ? (xc2 - xc1) * (yc2 - yc1) : 0;
+            int s1  = (x12 - x11) * (y12 - y11);
+            int s2  = (x22 - x21) * (y22 - y21);
+            int ss  = s1 + s2 - sc;
+            float iou;
+            if (min) iou = (float)sc / (s1 < s2 ? s1 : s2);
+            else     iou = (float)sc / ss;
+            if (iou > threshold) srclist[i].score = 0;
+            else if (head == -1) head = i;
+        }
+        if (head == -1) break;
+    }
+}
 
 void* yolodet_init(char *paramfile, char *binfile)
 {
@@ -40,7 +81,7 @@ void yolodet_free(void *ctxt)
     }
 }
 
-int yolodet_detect(void *ctxt, BBOX *tboxlist, int listsize, uint8_t *bitmap, int w, int h)
+int yolodet_detect(void *ctxt, BBOX *bboxlist, int listsize, uint8_t *bitmap, int w, int h)
 {
     int i;
     if (!ctxt || !bitmap) return 0;
@@ -59,14 +100,33 @@ int yolodet_detect(void *ctxt, BBOX *tboxlist, int listsize, uint8_t *bitmap, in
     ex.extract("output", out);
     in.release();
 
+    std::vector<BBOX> temp_list;
+    std::vector<BBOX> bbox_list;
     for (i = 0; i < out.h && i < listsize; i++) {
         const float* values = out.row(i);
-        tboxlist[i].category= values[0];
-        tboxlist[i].score   = values[1];
-        tboxlist[i].x1 = values[2] * w;
-        tboxlist[i].y1 = values[3] * h;
-        tboxlist[i].x2 = values[4] * w;
-        tboxlist[i].y2 = values[5] * h;
+        if (values[1] > SCORE_THRESHOLD) {
+            BBOX box;
+            box.category= values[0];
+            box.score   = values[1];
+            box.x1      = values[2] * w;
+            box.y1      = values[3] * h;
+            box.x2      = values[4] * w;
+            box.y2      = values[5] * h;
+            if (box.x1 < 0) box.x1 = 0;
+            if (box.x1 > w) box.x1 = w - 1;
+            if (box.y1 < 0) box.y1 = 0;
+            if (box.y1 > h) box.y1 = h - 1;
+            if (box.x2 < 0) box.x2 = 0;
+            if (box.x2 > w) box.x2 = w - 1;
+            if (box.y2 < 0) box.y2 = 0;
+            if (box.y2 > h) box.y2 = h - 1;
+            temp_list.push_back(box);
+        }
+    }
+    nms(bbox_list, temp_list, IOU_THRESHOLD, 1);
+
+    if (bboxlist) {
+        for (i = 0; i < (int)bbox_list.size() && i < listsize; i++) bboxlist[i] = bbox_list[i];
     }
     return i;
 }
