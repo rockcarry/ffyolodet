@@ -21,6 +21,9 @@ case "$1" in
     msc33x)
         $CXX --shared yolodet.cpp $CXX_FLAGS $LD_FLAGS -o libyolodet.so
         $STRIP test *.so
+#       $CXX -Wall -c bmpfile.c yolodet.cpp $CXX_FLAGS $LD_FLAGS
+#       cp $PWD/../libncnn/lib/libncnn.a libyolodet.a
+#       arm-buildroot-linux-uclibcgnueabihf-gcc-ar rcs libyolodet.a bmpfile.o yolodet.o
         ;;
     esac
     ;;

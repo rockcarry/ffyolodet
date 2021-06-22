@@ -10,7 +10,7 @@ if [ ! -d ncnn ]; then
 fi
 
 cd $TOPDIR/ncnn
-git checkout 20210322
+git checkout 20210525
 git checkout .
 echo "target_compile_options(ncnn PUBLIC -Os -ffunction-sections -fdata-sections)" >> $TOPDIR/ncnn/src/CMakeLists.txt
 cd -
@@ -33,6 +33,7 @@ cmake $TOPDIR/ncnn \
 -DNCNN_BUILD_EXAMPLES=OFF \
 -DNCNN_BUILD_TOOLS=OFF \
 -DNCNN_BUILD_TESTS=OFF \
+-DNCNN_INT8=ON \
 -DCMAKE_TOOLCHAIN_FILE=$CMAKE_TOOLCHAIN_FILE
 make -j8 && make install
 
