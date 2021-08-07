@@ -12,7 +12,7 @@ fi
 cd $TOPDIR/ncnn
 git checkout 20210525
 git checkout .
-echo "target_compile_options(ncnn PUBLIC -Os -ffunction-sections -fdata-sections)" >> $TOPDIR/ncnn/src/CMakeLists.txt
+echo "target_compile_options(ncnn PUBLIC -O3 -ffunction-sections -fdata-sections)" >> $TOPDIR/ncnn/src/CMakeLists.txt
 cd -
 
 rm -rf $TOPDIR/build-ncnn
