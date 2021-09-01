@@ -7,6 +7,7 @@
 
 typedef struct {
     ncnn::Net dnet;
+    int   modelver;
 } YOLODET;
 
 static const char* STR_CATEGORY_NAMES[] = {
@@ -27,6 +28,7 @@ void* yolodet_init(char *paramfile, char *binfile)
     if (yolodet) {
         yolodet->dnet.load_param(paramfile);
         yolodet->dnet.load_model(binfile  );
+        yolodet->modelver = strstr(paramfile, "fastest-v2") ? 2 : 1;
     }
     return yolodet;
 }
@@ -40,34 +42,153 @@ void yolodet_free(void *ctxt)
     }
 }
 
+static int bbox_cmp(const void *p1, const void *p2)
+{
+    if      (((BBOX*)p1)->score < ((BBOX*)p2)->score) return  1;
+    else if (((BBOX*)p1)->score > ((BBOX*)p2)->score) return -1;
+    else return 0;
+}
+
+static int nms(BBOX *bboxlist, int n, float threshold, int min)
+{
+    int i, j, c;
+    if (!bboxlist || !n) return 0;
+    qsort(bboxlist, n, sizeof(BBOX), bbox_cmp);
+    for (i=0; i<n && i!=-1; ) {
+        for (c=i,j=i+1,i=-1; j<n; j++) {
+            if (bboxlist[j].score == 0) continue;
+            if (bboxlist[c].category == bboxlist[j].category) {
+                float xc1, yc1, xc2, yc2, sc, s1, s2, ss, iou;
+                xc1 = bboxlist[c].x1 > bboxlist[j].x1 ? bboxlist[c].x1 : bboxlist[j].x1;
+                yc1 = bboxlist[c].y1 > bboxlist[j].y1 ? bboxlist[c].y1 : bboxlist[j].y1;
+                xc2 = bboxlist[c].x2 < bboxlist[j].x2 ? bboxlist[c].x2 : bboxlist[j].x2;
+                yc2 = bboxlist[c].y2 < bboxlist[j].y2 ? bboxlist[c].y2 : bboxlist[j].y2;
+                sc  = (xc1 < xc2 && yc1 < yc2) ? (xc2 - xc1) * (yc2 - yc1) : 0;
+                s1  = (bboxlist[c].x2 - bboxlist[c].x1) * (bboxlist[c].y2 - bboxlist[c].y1);
+                s2  = (bboxlist[j].x2 - bboxlist[j].x1) * (bboxlist[j].y2 - bboxlist[j].y1);
+                ss  = s1 + s2 - sc;
+                if (min) iou = sc / (s1 < s2 ? s1 : s2);
+                else     iou = sc / ss;
+                if (iou > threshold) bboxlist[j].score = 0;
+                else if (i == -1) i = j;
+            } else if (i == -1) i = j;
+        }
+    }
+    for (i=0,j=0; i<n; i++) {
+        if (bboxlist[i].score) {
+            bboxlist[j  ].score    = bboxlist[i].score;
+            bboxlist[j  ].category = bboxlist[i].category;
+            bboxlist[j  ].x1       = bboxlist[i].x1;
+            bboxlist[j  ].y1       = bboxlist[i].y1;
+            bboxlist[j  ].x2       = bboxlist[i].x2;
+            bboxlist[j++].y2       = bboxlist[i].y2;
+        }
+    }
+    return j;
+}
+
+#define ANCHOR_NUM    3
+#define CATEGORY_NUM  80
+#define SCORE_THRESH  0.5
+#define NMSIOU_THRESH 0.5
+#define V1_INPUT_W    320
+#define V1_INPUT_H    320
+#define V2_INPUT_W    352
+#define V2_INPUT_H    352
+static float s_v2_anchor_boxes[] = { 12.64, 19.39, 37.88, 51.48, 55.71, 138.31, 126.91, 78.23, 131.57, 214.55, 279.92, 258.87 };
+static int gen_bbox(ncnn::Mat *out, int n, BBOX *bboxlist, int listsize)
+{
+    int ow, oh, oc, gw, gh, i, j, k, l, num = 0;
+    while (--n >= 0) {
+        ow = out[n].h;
+        oh = out[n].c;
+        oc = out[n].w;
+        gw = V2_INPUT_W / ow;
+        gh = V2_INPUT_H / oh;
+
+        for (i=0; i<oh; i++) {
+            float *values = out[n].channel(i);
+            for (j=0; j<ow; j++) {
+                for (k=0; k<ANCHOR_NUM; k++) {
+                    float objscore = values[4 * ANCHOR_NUM + k];
+//                  float clsscore = values[4 * ANCHOR_NUM + ANCHOR_NUM + k * CATEGORY_NUM + 0];
+                    float clsscore = values[4 * ANCHOR_NUM + ANCHOR_NUM + 0];
+                    int   clsidx   = 0;
+                    for (l=1; l<CATEGORY_NUM; l++) {
+//                      if (clsscore < values[4 * ANCHOR_NUM + ANCHOR_NUM + k * CATEGORY_NUM + l]) {
+//                          clsscore = values[4 * ANCHOR_NUM + ANCHOR_NUM + k * CATEGORY_NUM + l];
+                        if (clsscore < values[4 * ANCHOR_NUM + ANCHOR_NUM + l]) {
+                            clsscore = values[4 * ANCHOR_NUM + ANCHOR_NUM + l];
+                            clsidx   = l;
+                        }
+                    }
+                    if (objscore * clsscore >= SCORE_THRESH) {
+                        float bcx = ((values[k * 4 + 0] * 2 - 0.5) + j) * gw;
+                        float bcy = ((values[k * 4 + 1] * 2 - 0.5) + i) * gh;
+                        float bw  = pow((values[k * 4 + 2] * 2), 2) * s_v2_anchor_boxes[(n * ANCHOR_NUM * 2) + k * 2 + 0];
+                        float bh  = pow((values[k * 4 + 3] * 2), 2) * s_v2_anchor_boxes[(n * ANCHOR_NUM * 2) + k * 2 + 1];
+                        if (num < listsize) {
+                            bboxlist[num].category = clsidx + 1;
+                            bboxlist[num].score    = objscore * clsscore;
+                            bboxlist[num].x1       = bcx - bw * 0.5f;
+                            bboxlist[num].y1       = bcy - bh * 0.5f;
+                            bboxlist[num].x2       = bcx + bw * 0.5f;
+                            bboxlist[num].y2       = bcy + bh * 0.5f;
+                            num++;
+                        }
+                    }
+                }
+                values += oc;
+            }
+        }
+    }
+    return nms(bboxlist, num, NMSIOU_THRESH, 1);
+}
+
 int yolodet_detect(void *ctxt, BBOX *bboxlist, int listsize, uint8_t *bitmap, int w, int h)
 {
-    int i;
+    int i, n, inputw, inputh;
     if (!ctxt || !bitmap) return 0;
     YOLODET *yolodet = (YOLODET*)ctxt;
 
     static const float MEAN_VALS[3] = { 0.f, 0.f, 0.f };
     static const float NORM_VALS[3] = { 1/255.f, 1/255.f, 1/255.f };
-    ncnn::Mat in = ncnn::Mat::from_pixels(bitmap, ncnn::Mat::PIXEL_BGR2RGB, w, h);
+    inputw = yolodet->modelver == 2 ? V2_INPUT_W : V1_INPUT_W;
+    inputh = yolodet->modelver == 2 ? V2_INPUT_H : V1_INPUT_H;
+    ncnn::Mat in = ncnn::Mat::from_pixels_resize(bitmap, ncnn::Mat::PIXEL_BGR2RGB, w, h, inputw, inputh);
     in.substract_mean_normalize(MEAN_VALS, NORM_VALS);
 
-    ncnn::Mat out;
+    ncnn::Mat out[2];
     ncnn::Extractor ex = yolodet->dnet.create_extractor();
 //  ex.set_num_threads(NUMTHREADS);
     ex.set_light_mode(true);
-    ex.input  ("data"  , in );
-    ex.extract("output", out);
-    in.release();
 
-    std::vector<BBOX> bbox_list;
-    for (i = 0; i < out.h && i < listsize; i++) {
-        const float* values = out.row(i);
-        bboxlist[i].category = values[0];
-        bboxlist[i].score    = values[1];
-        bboxlist[i].x1       = values[2] * w;
-        bboxlist[i].y1       = values[3] * h;
-        bboxlist[i].x2       = values[4] * w;
-        bboxlist[i].y2       = values[5] * h;
+    switch (yolodet->modelver) {
+    case 1:
+        ex.input  ("data"  , in    );
+        ex.extract("output", out[0]);
+        for (i = 0; i < out[0].h && i < listsize; i++) {
+            const float* values = out[0].row(i);
+            bboxlist[i].category = values[0];
+            bboxlist[i].score    = values[1];
+            bboxlist[i].x1       = values[2] * w;
+            bboxlist[i].y1       = values[3] * h;
+            bboxlist[i].x2       = values[4] * w;
+            bboxlist[i].y2       = values[5] * h;
+        }
+        break;
+    case 2:
+        ex.input("input.1", in);
+        ex.extract("794", out[0]);
+        ex.extract("796", out[1]);
+        n = gen_bbox(out, 2, bboxlist, listsize);
+        for (i = 0; i < n; i++) {
+            bboxlist[i].x1 = bboxlist[i].x1 * w / inputw;
+            bboxlist[i].y1 = bboxlist[i].y1 * h / inputh;
+            bboxlist[i].x2 = bboxlist[i].x2 * w / inputw;
+            bboxlist[i].y2 = bboxlist[i].y2 * h / inputh;
+        }
+        break;
     }
     return i;
 }
@@ -97,7 +218,7 @@ int main(int argc, char *argv[])
     char *binfile  = (char*)"yolo-fastest-1.1-xl.bin";
     void *yolodet  = NULL;
     BMP   mybmp    = {0};
-    BBOX  tboxes[100];
+    BBOX  bboxes[100];
     uint32_t tick;
     int      n, i;
 
@@ -118,15 +239,15 @@ int main(int argc, char *argv[])
     printf("do face detection 100 times ...\n");
     tick = get_tick_count();
     for (i = 0; i < 100; i++) {
-        n = yolodet_detect(yolodet, tboxes, 100, (uint8_t*)mybmp.pdata, mybmp.width, mybmp.height);
+        n = yolodet_detect(yolodet, bboxes, 100, (uint8_t*)mybmp.pdata, mybmp.width, mybmp.height);
     }
     printf("finish !\n");
     printf("totoal used time: %d ms\n\n", (int)get_tick_count() - (int)tick);
 
     printf("target rect list:\n");
     for (i = 0; i < n; i++) {
-        printf("score: %.2f, category: %12s, rect: (%3d %3d %3d %3d)\n", tboxes[i].score, yolodet_category2str(tboxes[i].category), tboxes[i].x1, tboxes[i].y1, tboxes[i].x2, tboxes[i].y2);
-        bmp_rectangle(&mybmp, tboxes[i].x1, tboxes[i].y1, tboxes[i].x2, tboxes[i].y2, 0, 255, 0);
+        printf("score: %.2f, category: %12s, rect: (%3d %3d %3d %3d)\n", bboxes[i].score, yolodet_category2str(bboxes[i].category), (int)bboxes[i].x1, (int)bboxes[i].y1, (int)bboxes[i].x2, (int)bboxes[i].y2);
+        bmp_rectangle(&mybmp, (int)bboxes[i].x1, (int)bboxes[i].y1, (int)bboxes[i].x2, (int)bboxes[i].y2, 0, 255, 0);
     }
     printf("\n");
 

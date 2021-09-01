@@ -6,9 +6,8 @@ extern "C" {
 #endif
 
 typedef struct {
-    int   x1, y1, x2, y2;
+    float score, x1, y1, x2, y2;
     int   category;
-    float score;
 } BBOX;
 
 void* yolodet_init  (char *paramfile, char *binfile);
