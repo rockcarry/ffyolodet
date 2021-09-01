@@ -2,7 +2,7 @@
 
 set -e
 
-CXX_FLAGS="-I$PWD/../libncnn/include -std=c++11 -Os -ffunction-sections -fdata-sections -fPIC"
+CXX_FLAGS="-I$PWD/../libncnn/include -std=c++11 -Ofast -ffunction-sections -fdata-sections -fPIC"
 LD_FLAGS="-L$PWD/../libncnn/lib -lncnn -lpthread -flto -Wl,-gc-sections -Wl,-strip-all"
 
 case "$1" in
