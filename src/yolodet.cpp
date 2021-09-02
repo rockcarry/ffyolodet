@@ -5,7 +5,7 @@
 #include "bmpfile.h"
 #include "yolodet.h"
 
-#define ENABLE_RESIZE_INPUT  1
+#define ENABLE_RESIZE_INPUT  0
 #define RESIZE_INPUT_WIDTH   256
 #define RESIZE_INPUT_HEIGHT  160
 
@@ -154,15 +154,9 @@ int yolodet_detect(void *ctxt, BBOX *bboxlist, int listsize, uint8_t *bitmap, in
     static const float MEAN_VALS[3] = { 0.f, 0.f, 0.f };
     static const float NORM_VALS[3] = { 1/255.f, 1/255.f, 1/255.f };
 
-#if ENABLE_RESIZE_INPUT
-    yolodet->inputw = RESIZE_INPUT_WIDTH ;
-    yolodet->inputh = RESIZE_INPUT_HEIGHT;
+    yolodet->inputw = ENABLE_RESIZE_INPUT ? RESIZE_INPUT_WIDTH : w;
+    yolodet->inputh = ENABLE_RESIZE_INPUT ? RESIZE_INPUT_HEIGHT: h;
     ncnn::Mat in = ncnn::Mat::from_pixels_resize(bitmap, ncnn::Mat::PIXEL_BGR2RGB, w, h, yolodet->inputw, yolodet->inputh);
-#else
-    yolodet->inputw = w;
-    yolodet->inputh = h;
-    ncnn::Mat in = ncnn::Mat::from_pixels(bitmap, ncnn::Mat::PIXEL_BGR2RGB, w, h);
-#endif
     in.substract_mean_normalize(MEAN_VALS, NORM_VALS);
 
     ncnn::Mat out[2];
