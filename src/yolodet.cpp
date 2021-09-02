@@ -5,6 +5,10 @@
 #include "bmpfile.h"
 #include "yolodet.h"
 
+#define ENABLE_RESIZE_INPUT  1
+#define RESIZE_INPUT_WIDTH   256
+#define RESIZE_INPUT_HEIGHT  160
+
 #define ALIGN(a, b) (((a) + (b) - 1) & ~((b) - 1))
 
 typedef struct {
@@ -110,12 +114,9 @@ static int gen_bbox(int inputw, int inputh, ncnn::Mat *out, int n, BBOX *bboxlis
             for (j=0; j<ow; j++) {
                 for (k=0; k<ANCHOR_NUM; k++) {
                     float objscore = values[4 * ANCHOR_NUM + k];
-//                  float clsscore = values[4 * ANCHOR_NUM + ANCHOR_NUM + k * CATEGORY_NUM + 0];
                     float clsscore = values[4 * ANCHOR_NUM + ANCHOR_NUM + 0];
                     int   clsidx   = 0;
                     for (l=1; l<CATEGORY_NUM; l++) {
-//                      if (clsscore < values[4 * ANCHOR_NUM + ANCHOR_NUM + k * CATEGORY_NUM + l]) {
-//                          clsscore = values[4 * ANCHOR_NUM + ANCHOR_NUM + k * CATEGORY_NUM + l];
                         if (clsscore < values[4 * ANCHOR_NUM + ANCHOR_NUM + l]) {
                             clsscore = values[4 * ANCHOR_NUM + ANCHOR_NUM + l];
                             clsidx   = l;
@@ -146,20 +147,26 @@ static int gen_bbox(int inputw, int inputh, ncnn::Mat *out, int n, BBOX *bboxlis
 
 int yolodet_detect(void *ctxt, BBOX *bboxlist, int listsize, uint8_t *bitmap, int w, int h)
 {
-    int i;
+    int i, n;
     if (!ctxt || !bitmap) return 0;
     YOLODET *yolodet = (YOLODET*)ctxt;
 
     static const float MEAN_VALS[3] = { 0.f, 0.f, 0.f };
     static const float NORM_VALS[3] = { 1/255.f, 1/255.f, 1/255.f };
+
+#if ENABLE_RESIZE_INPUT
+    yolodet->inputw = RESIZE_INPUT_WIDTH ;
+    yolodet->inputh = RESIZE_INPUT_HEIGHT;
+    ncnn::Mat in = ncnn::Mat::from_pixels_resize(bitmap, ncnn::Mat::PIXEL_BGR2RGB, w, h, yolodet->inputw, yolodet->inputh);
+#else
     yolodet->inputw = w;
     yolodet->inputh = h;
     ncnn::Mat in = ncnn::Mat::from_pixels(bitmap, ncnn::Mat::PIXEL_BGR2RGB, w, h);
+#endif
     in.substract_mean_normalize(MEAN_VALS, NORM_VALS);
 
     ncnn::Mat out[2];
     ncnn::Extractor ex = yolodet->dnet.create_extractor();
-//  ex.set_num_threads(NUMTHREADS);
     ex.set_light_mode(true);
 
     switch (yolodet->modelver) {
@@ -167,7 +174,7 @@ int yolodet_detect(void *ctxt, BBOX *bboxlist, int listsize, uint8_t *bitmap, in
         ex.input  ("data"  , in    );
         ex.extract("output", out[0]);
         for (i = 0; i < out[0].h && i < listsize; i++) {
-            const float* values = out[0].row(i);
+            const float * values = out[0].row(i);
             bboxlist[i].category = values[0];
             bboxlist[i].score    = values[1];
             bboxlist[i].x1       = values[2] * w;
@@ -180,7 +187,13 @@ int yolodet_detect(void *ctxt, BBOX *bboxlist, int listsize, uint8_t *bitmap, in
         ex.input("input.1", in);
         ex.extract("794", out[0]);
         ex.extract("796", out[1]);
-        i = gen_bbox(yolodet->inputw, yolodet->inputh, out, 2, bboxlist, listsize);
+        n = gen_bbox(yolodet->inputw, yolodet->inputh, out, 2, bboxlist, listsize);
+        for (i = 0; i < n; i++) {
+            bboxlist[i].x1 = bboxlist[i].x1 * w / yolodet->inputw;
+            bboxlist[i].y1 = bboxlist[i].y1 * h / yolodet->inputh;
+            bboxlist[i].x2 = bboxlist[i].x2 * w / yolodet->inputw;
+            bboxlist[i].y2 = bboxlist[i].y2 * h / yolodet->inputh;
+        }
         break;
     }
     return i;
