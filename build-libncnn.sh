@@ -18,7 +18,7 @@ rm -rf $TOPDIR/build-ncnn
 mkdir -p $TOPDIR/build-ncnn
 cd $TOPDIR/build-ncnn
 
-cmake $TOPDIR/ncnn \
+cmake -G"Unix Makefiles" $TOPDIR/ncnn \
 -DNCNN_ENABLE_LTO=ON \
 -DNCNN_VULKAN=OFF \
 -DNCNN_OPENMP=OFF \
