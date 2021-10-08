@@ -14,6 +14,7 @@
 typedef struct {
     ncnn::Net dnet;
     int   modelver;
+    int   imagew, imageh;
     int   inputw, inputh;
 } YOLODET;
 
@@ -29,13 +30,17 @@ static const char* STR_CATEGORY_NAMES[] = {
     "hair drier", "toothbrush"
 };
 
-void* yolodet_init(char *paramfile, char *binfile)
+void* yolodet_init(char *paramfile, char *binfile, int imgw, int imgh)
 {
     YOLODET *yolodet = new YOLODET();
     if (yolodet) {
         yolodet->dnet.load_param(paramfile);
         yolodet->dnet.load_model(binfile  );
         yolodet->modelver = strstr(paramfile, "fastest-v2") ? 2 : 1;
+        yolodet->imagew   = imgw;
+        yolodet->imageh   = imgh;
+        yolodet->inputw   = ENABLE_RESIZE_INPUT ? RESIZE_INPUT_WIDTH : imgw;
+        yolodet->inputh   = ENABLE_RESIZE_INPUT ? RESIZE_INPUT_HEIGHT: imgh;
     }
     return yolodet;
 }
@@ -145,7 +150,7 @@ static int gen_bbox(int inputw, int inputh, ncnn::Mat *out, int n, BBOX *bboxlis
     return nms(bboxlist, num, NMSIOU_THRESH, 1);
 }
 
-int yolodet_detect(void *ctxt, BBOX *bboxlist, int listsize, uint8_t *bitmap, int w, int h)
+int yolodet_detect(void *ctxt, BBOX *bboxlist, int listsize, uint8_t *bitmap)
 {
     int i, n;
     if (!ctxt || !bitmap) return 0;
@@ -154,9 +159,7 @@ int yolodet_detect(void *ctxt, BBOX *bboxlist, int listsize, uint8_t *bitmap, in
     static const float MEAN_VALS[3] = { 0.f, 0.f, 0.f };
     static const float NORM_VALS[3] = { 1/255.f, 1/255.f, 1/255.f };
 
-    yolodet->inputw = ENABLE_RESIZE_INPUT ? RESIZE_INPUT_WIDTH : w;
-    yolodet->inputh = ENABLE_RESIZE_INPUT ? RESIZE_INPUT_HEIGHT: h;
-    ncnn::Mat in = ncnn::Mat::from_pixels_resize(bitmap, ncnn::Mat::PIXEL_BGR2RGB, w, h, yolodet->inputw, yolodet->inputh);
+    ncnn::Mat in = ncnn::Mat::from_pixels_resize(bitmap, ncnn::Mat::PIXEL_BGR2RGB, yolodet->imagew, yolodet->imageh, yolodet->inputw, yolodet->inputh);
     in.substract_mean_normalize(MEAN_VALS, NORM_VALS);
 
     ncnn::Mat out[2];
@@ -171,10 +174,10 @@ int yolodet_detect(void *ctxt, BBOX *bboxlist, int listsize, uint8_t *bitmap, in
             const float * values = out[0].row(i);
             bboxlist[i].category = values[0];
             bboxlist[i].score    = values[1];
-            bboxlist[i].x1       = values[2] * w;
-            bboxlist[i].y1       = values[3] * h;
-            bboxlist[i].x2       = values[4] * w;
-            bboxlist[i].y2       = values[5] * h;
+            bboxlist[i].x1       = values[2] * yolodet->imagew;
+            bboxlist[i].y1       = values[3] * yolodet->imageh;
+            bboxlist[i].x2       = values[4] * yolodet->imagew;
+            bboxlist[i].y2       = values[5] * yolodet->imageh;
         }
         break;
     case 2:
@@ -183,10 +186,10 @@ int yolodet_detect(void *ctxt, BBOX *bboxlist, int listsize, uint8_t *bitmap, in
         ex.extract("796", out[1]);
         n = gen_bbox(yolodet->inputw, yolodet->inputh, out, 2, bboxlist, listsize);
         for (i = 0; i < n; i++) {
-            bboxlist[i].x1 = bboxlist[i].x1 * w / yolodet->inputw;
-            bboxlist[i].y1 = bboxlist[i].y1 * h / yolodet->inputh;
-            bboxlist[i].x2 = bboxlist[i].x2 * w / yolodet->inputw;
-            bboxlist[i].y2 = bboxlist[i].y2 * h / yolodet->inputh;
+            bboxlist[i].x1 = bboxlist[i].x1 * yolodet->imagew / yolodet->inputw;
+            bboxlist[i].y1 = bboxlist[i].y1 * yolodet->imageh / yolodet->inputh;
+            bboxlist[i].x2 = bboxlist[i].x2 * yolodet->imagew / yolodet->inputw;
+            bboxlist[i].y2 = bboxlist[i].y2 * yolodet->imageh / yolodet->inputh;
         }
         break;
     }
@@ -230,16 +233,16 @@ int main(int argc, char *argv[])
     printf("binfile  : %s\n", binfile  );
     printf("\n");
 
-    yolodet = yolodet_init(paramfile, binfile);
     if (0 != bmp_load(&mybmp, bmpfile)) {
         printf("failed to load bmpfile %s !\n", bmpfile);
         goto done;
     }
 
+    yolodet = yolodet_init(paramfile, binfile, mybmp.width, mybmp.height);
     printf("do face detection 100 times ...\n");
     tick = get_tick_count();
     for (i = 0; i < 100; i++) {
-        n = yolodet_detect(yolodet, bboxes, 100, (uint8_t*)mybmp.pdata, mybmp.width, mybmp.height);
+        n = yolodet_detect(yolodet, bboxes, 100, (uint8_t*)mybmp.pdata);
     }
     printf("finish !\n");
     printf("totoal used time: %d ms\n\n", (int)get_tick_count() - (int)tick);
@@ -255,8 +258,8 @@ int main(int argc, char *argv[])
     bmp_save(&mybmp, (char*)"out.bmp");
 
 done:
-    bmp_free(&mybmp);
     yolodet_free(yolodet);
+    bmp_free(&mybmp);
     return 0;
 }
 #endif
