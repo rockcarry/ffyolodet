@@ -7,27 +7,13 @@ LD_FLAGS="-L$PWD/../libncnn/lib -lncnn -lpthread -flto -Wl,-gc-sections -Wl,-str
 
 case "$1" in
 "")
-    $CXX -Wall -D_TEST_ bmpfile.c yolodet.cpp $CXX_FLAGS $LD_FLAGS -o test
-    case "$TARGET_PLATFORM" in
-    win32)
-        $CXX --shared yolodet.cpp $CXX_FLAGS $LD_FLAGS -o yolodet.dll
-        dlltool -l yolodet.lib -d yolodet.def
-        $STRIP *.exe *.dll
-        ;;
-    ubuntu)
-        $CXX --shared yolodet.cpp $CXX_FLAGS $LD_FLAGS -o libyolodet.so
-        $STRIP test *.so
-        ;;
-    msc33x)
-        $CXX --shared yolodet.cpp $CXX_FLAGS $LD_FLAGS -o libyolodet.so
-        $STRIP test *.so
-        $CXX -Wall -c bmpfile.c yolodet.cpp $CXX_FLAGS $LD_FLAGS
-        cp $PWD/../libncnn/lib/libncnn.a libyolodet.a
-        ${CC}-ar rcs libyolodet.a bmpfile.o yolodet.o
-        ;;
-    esac
+    $CXX -Wall -D_TEST_ bmpfile.c yolodet.cpp $CXX_FLAGS $LD_FLAGS -o yolotest
+    $CXX -Wall -D_TEST_ bmpfile.c facedet.cpp $CXX_FLAGS $LD_FLAGS -o facetest
+    $CXX -Wall -c bmpfile.c yolodet.cpp facedet.cpp $CXX_FLAGS $LD_FLAGS
+    cp $PWD/../libncnn/lib/libncnn.a libyolodet.a
+    ${CC}-ar rcs libyolodet.a bmpfile.o yolodet.o facedet.o
     ;;
 clean)
-    rm -rf test *.so *.dll *.exe out.bmp
+    rm -rf yolotest facetest *.a *.o *.exe out.bmp
     ;;
 esac

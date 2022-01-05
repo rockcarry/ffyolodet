@@ -7,5 +7,6 @@
 out.bmp
 /ncnn/
 /libncnn/
-/src/test
+/src/yolotest
+/src/facetest
 

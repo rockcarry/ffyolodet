@@ -159,6 +159,7 @@ int yolodet_detect(void *ctxt, BBOX *bboxlist, int listsize, uint8_t *bitmap)
     static const float MEAN_VALS[3] = { 0.f, 0.f, 0.f };
     static const float NORM_VALS[3] = { 1/255.f, 1/255.f, 1/255.f };
 
+//  ncnn::Mat in = ncnn::Mat::from_pixels_resize(bitmap, ncnn::Mat::PIXEL_RGBA2RGB, yolodet->imagew, yolodet->imageh, yolodet->inputw, yolodet->inputh);
     ncnn::Mat in = ncnn::Mat::from_pixels_resize(bitmap, ncnn::Mat::PIXEL_BGR2RGB, yolodet->imagew, yolodet->imageh, yolodet->inputw, yolodet->inputh);
     in.substract_mean_normalize(MEAN_VALS, NORM_VALS);
 
