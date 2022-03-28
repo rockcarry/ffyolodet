@@ -7,7 +7,7 @@ extern "C" {
 
 typedef struct {
     float score, x1, y1, x2, y2;
-    int   category;
+    int   category, trackid;
 } BBOX;
 
 void* yolodet_init  (char *paramfile, char *binfile, int imgw, int imgh);
