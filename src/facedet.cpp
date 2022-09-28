@@ -22,25 +22,25 @@ static void nms(std::vector<BBOX> &dstlist, std::vector<BBOX> &srclist, const fl
     sort(srclist.begin(), srclist.end(), cmp_score);
     int head, i;
     for (head = 0; head < (int)srclist.size(); ) {
-        int x11 = srclist[head].x1;
-        int y11 = srclist[head].y1;
-        int x12 = srclist[head].x2;
-        int y12 = srclist[head].y2;
+        float x11 = srclist[head].x1;
+        float y11 = srclist[head].y1;
+        float x12 = srclist[head].x2;
+        float y12 = srclist[head].y2;
         dstlist.push_back(srclist[head]);
         for (i = head + 1, head = -1; i < (int)srclist.size(); i++) {
             if (srclist[i].score == 0) continue;
-            int x21 = srclist[i].x1;
-            int y21 = srclist[i].y1;
-            int x22 = srclist[i].x2;
-            int y22 = srclist[i].y2;
-            int xc1 = x11 > x21 ? x11 : x21;
-            int yc1 = y11 > y21 ? y11 : y21;
-            int xc2 = x12 < x22 ? x12 : x22;
-            int yc2 = y12 < y22 ? y12 : y22;
-            int sc  = (xc1 < xc2 && yc1 < yc2) ? (xc2 - xc1) * (yc2 - yc1) : 0;
-            int s1  = (x12 - x11) * (y12 - y11);
-            int s2  = (x22 - x21) * (y22 - y21);
-            int ss  = s1 + s2 - sc;
+            float x21 = srclist[i].x1;
+            float y21 = srclist[i].y1;
+            float x22 = srclist[i].x2;
+            float y22 = srclist[i].y2;
+            float xc1 = x11 > x21 ? x11 : x21;
+            float yc1 = y11 > y21 ? y11 : y21;
+            float xc2 = x12 < x22 ? x12 : x22;
+            float yc2 = y12 < y22 ? y12 : y22;
+            float sc  = (xc1 < xc2 && yc1 < yc2) ? (xc2 - xc1) * (yc2 - yc1) : 0;
+            float s1  = (x12 - x11) * (y12 - y11);
+            float s2  = (x22 - x21) * (y22 - y21);
+            float ss  = s1 + s2 - sc;
             float iou;
             if (min) iou = (float)sc / (s1 < s2 ? s1 : s2);
             else     iou = (float)sc / ss;
@@ -137,10 +137,10 @@ int facedet_detect(void *ctxt, BBOX *bboxlist, int listsize, uint8_t *bitmap)
             float w = exp(boxes.channel(0)[i * 4 + 2] * SIZE_VARIANCE) * facedet->priors[i][2];
             float h = exp(boxes.channel(0)[i * 4 + 3] * SIZE_VARIANCE) * facedet->priors[i][3];
 
-            box.x1 = clip(x_center - w / 2.0, 1) * facedet->input_w;
-            box.y1 = clip(y_center - h / 2.0, 1) * facedet->input_h;
-            box.x2 = clip(x_center + w / 2.0, 1) * facedet->input_w;
-            box.y2 = clip(y_center + h / 2.0, 1) * facedet->input_h;
+            box.x1 = clip(x_center - w / 2.0, 1);
+            box.y1 = clip(y_center - h / 2.0, 1);
+            box.x2 = clip(x_center + w / 2.0, 1);
+            box.y2 = clip(y_center + h / 2.0, 1);
             box.score = clip(scores.channel(0)[i * 2 + 1], 1);
             temp_list.push_back(box);
         }
@@ -201,8 +201,8 @@ int main(int argc, char *argv[])
 
     printf("face rect list:\n");
     for (i = 0; i < n; i++) {
-        printf("score: %.2f, rect: (%3d %3d %3d %3d)\n", bboxes[i].score, (int)bboxes[i].x1, (int)bboxes[i].y1, (int)bboxes[i].x2, (int)bboxes[i].y2);
-        bmp_rectangle(&mybmp, (int)bboxes[i].x1, (int)bboxes[i].y1, (int)bboxes[i].x2, (int)bboxes[i].y2, 0, 255, 0);
+        printf("score: %.2f, rect: (%3d %3d %3d %3d)\n", bboxes[i].score, (int)(bboxes[i].x1 * mybmp.width), (int)(bboxes[i].y1 * mybmp.height), (int)(bboxes[i].x2 * mybmp.width), (int)(bboxes[i].y2 * mybmp.height));
+        bmp_rectangle(&mybmp, (int)(bboxes[i].x1 * mybmp.width), (int)(bboxes[i].y1 * mybmp.height), (int)(bboxes[i].x2 * mybmp.width), (int)(bboxes[i].y2 * mybmp.height), 0, 255, 0);
     }
     printf("\n");
 
