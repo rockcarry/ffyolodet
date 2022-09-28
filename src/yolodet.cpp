@@ -106,13 +106,11 @@ static int nms(BBOX *bboxlist, int n, float threshold, int min)
 static float s_v2_anchor_boxes[] = { 12.64, 19.39, 37.88, 51.48, 55.71, 138.31, 126.91, 78.23, 131.57, 214.55, 279.92, 258.87 };
 static int gen_bbox(int inputw, int inputh, ncnn::Mat *out, int n, BBOX *bboxlist, int listsize)
 {
-    int ow, oh, oc, gw, gh, i, j, k, l, num = 0;
+    int ow, oh, oc, i, j, k, l, num = 0;
     while (--n >= 0) {
         ow = out[n].h;
         oh = out[n].c;
         oc = out[n].w;
-        gw = inputw / ow;
-        gh = inputh / oh;
 
         for (i=0; i<oh; i++) {
             float *values = out[n].channel(i);
@@ -128,17 +126,17 @@ static int gen_bbox(int inputw, int inputh, ncnn::Mat *out, int n, BBOX *bboxlis
                         }
                     }
                     if (objscore * clsscore >= SCORE_THRESH) {
-                        float bcx = ((values[k * 4 + 0] * 2 - 0.5) + j) * gw;
-                        float bcy = ((values[k * 4 + 1] * 2 - 0.5) + i) * gh;
+                        float bcx = ((values[k * 4 + 0] * 2 - 0.5) + j) / ow;
+                        float bcy = ((values[k * 4 + 1] * 2 - 0.5) + i) / oh;
                         float bw  = pow((values[k * 4 + 2] * 2), 2) * s_v2_anchor_boxes[(n * ANCHOR_NUM * 2) + k * 2 + 0];
                         float bh  = pow((values[k * 4 + 3] * 2), 2) * s_v2_anchor_boxes[(n * ANCHOR_NUM * 2) + k * 2 + 1];
                         if (num < listsize) {
                             bboxlist[num].category = clsidx + 1;
                             bboxlist[num].score    = objscore * clsscore;
-                            bboxlist[num].x1       = bcx - bw * 0.5f;
-                            bboxlist[num].y1       = bcy - bh * 0.5f;
-                            bboxlist[num].x2       = bcx + bw * 0.5f;
-                            bboxlist[num].y2       = bcy + bh * 0.5f;
+                            bboxlist[num].x1       = bcx - bw / inputw * 0.5f;
+                            bboxlist[num].y1       = bcy - bh / inputh * 0.5f;
+                            bboxlist[num].x2       = bcx + bw / inputw * 0.5f;
+                            bboxlist[num].y2       = bcy + bh / inputh * 0.5f;
                             num++;
                         }
                     }
@@ -152,7 +150,7 @@ static int gen_bbox(int inputw, int inputh, ncnn::Mat *out, int n, BBOX *bboxlis
 
 int yolodet_detect(void *ctxt, BBOX *bboxlist, int listsize, uint8_t *bitmap)
 {
-    int i, n;
+    int i;
     if (!ctxt || !bitmap) return 0;
     YOLODET *yolodet = (YOLODET*)ctxt;
 
@@ -175,23 +173,17 @@ int yolodet_detect(void *ctxt, BBOX *bboxlist, int listsize, uint8_t *bitmap)
             const float * values = out[0].row(i);
             bboxlist[i].category = values[0];
             bboxlist[i].score    = values[1];
-            bboxlist[i].x1       = values[2] * yolodet->imagew;
-            bboxlist[i].y1       = values[3] * yolodet->imageh;
-            bboxlist[i].x2       = values[4] * yolodet->imagew;
-            bboxlist[i].y2       = values[5] * yolodet->imageh;
+            bboxlist[i].x1       = values[2];
+            bboxlist[i].y1       = values[3];
+            bboxlist[i].x2       = values[4];
+            bboxlist[i].y2       = values[5];
         }
         break;
     case 2:
         ex.input("input.1", in);
         ex.extract("794", out[0]);
         ex.extract("796", out[1]);
-        n = gen_bbox(yolodet->inputw, yolodet->inputh, out, 2, bboxlist, listsize);
-        for (i = 0; i < n; i++) {
-            bboxlist[i].x1 = bboxlist[i].x1 * yolodet->imagew / yolodet->inputw;
-            bboxlist[i].y1 = bboxlist[i].y1 * yolodet->imageh / yolodet->inputh;
-            bboxlist[i].x2 = bboxlist[i].x2 * yolodet->imagew / yolodet->inputw;
-            bboxlist[i].y2 = bboxlist[i].y2 * yolodet->imageh / yolodet->inputh;
-        }
+        i = gen_bbox(yolodet->inputw, yolodet->inputh, out, 2, bboxlist, listsize);
         break;
     }
     return i;
@@ -250,8 +242,9 @@ int main(int argc, char *argv[])
 
     printf("target rect list:\n");
     for (i = 0; i < n; i++) {
-        printf("score: %.2f, category: %12s, rect: (%3d %3d %3d %3d)\n", bboxes[i].score, yolodet_category2str(bboxes[i].category), (int)bboxes[i].x1, (int)bboxes[i].y1, (int)bboxes[i].x2, (int)bboxes[i].y2);
-        bmp_rectangle(&mybmp, (int)bboxes[i].x1, (int)bboxes[i].y1, (int)bboxes[i].x2, (int)bboxes[i].y2, 0, 255, 0);
+        printf("score: %.2f, category: %12s, rect: (%3d %3d %3d %3d)\n", bboxes[i].score, yolodet_category2str(bboxes[i].category),
+            (int)(bboxes[i].x1 * mybmp.width), (int)(bboxes[i].y1 * mybmp.height), (int)(bboxes[i].x2 * mybmp.width), (int)(bboxes[i].y2 * mybmp.height));
+        bmp_rectangle(&mybmp, (int)(bboxes[i].x1 * mybmp.width), (int)(bboxes[i].y1 * mybmp.height), (int)(bboxes[i].x2 * mybmp.width), (int)(bboxes[i].y2 * mybmp.height), 0, 255, 0);
     }
     printf("\n");
 
